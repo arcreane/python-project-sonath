@@ -2,7 +2,6 @@ import tkinter as tk
 import random
 import time
 
-
 class MovingObstacle:
     def __init__(self, start_pos, direction, grid_size, num_rows, num_cols):
         self.pos = start_pos
@@ -47,6 +46,20 @@ class PacmanGame:
         self.elapsed_time = 0
         self.bonbons = []
         self.show_start_menu()
+
+    def reset_game(self):
+        """Réinitialise les variables essentielles du jeu pour recommencer à zéro."""
+        self.level = 1
+        self.lives = 10
+        self.start_time = None
+        self.elapsed_time = 0
+        self.player_pos = [33, 0]
+        self.direction = "right"
+        self.exit_unlocked = False
+        self.bonbons = self.generate_bonbons(count=5)  # Initialisation des bonbons pour le niveau 1
+        self.obstacles = self.generate_obstacles(count=300)  # Initialisation des obstacles
+        self.moving_obstacles = self.create_moving_obstacles(count=2)  # Obstacles mobiles pour le niveau 1
+        self.clear_canvas()
 
     def show_start_menu(self):
         self.clear_canvas()
@@ -98,8 +111,8 @@ class PacmanGame:
         self.lives = 10
         self.exit_pos = (0, 61)
         self.obstacles = self.generate_obstacles(count=300)
-        self.moving_obstacles = self.create_moving_obstacles(count=5)
-        self.bonbons = self.generate_bonbons(count=10)
+        self.moving_obstacles = self.create_moving_obstacles(count=2)  # Niveau 1 : 2 obstacles mobiles
+        self.bonbons = self.generate_bonbons(count=5)  # Niveau 1 : 5 bonbons
         self.exit_unlocked = False
 
         self.root.bind("<Up>", self.change_direction_up)
@@ -131,7 +144,7 @@ class PacmanGame:
 
         return list(obstacles)
 
-    def generate_bonbons(self, count=10):
+    def generate_bonbons(self, count=5):  # Niveau 1 : 5 bonbons
         bonbons = set()
         while len(bonbons) < count:
             row = random.randint(0, self.num_rows - 1)
@@ -141,7 +154,7 @@ class PacmanGame:
                 bonbons.add(pos)
         return list(bonbons)
 
-    def create_moving_obstacles(self, count=5):
+    def create_moving_obstacles(self, count=2):  # Niveau 1 : 2 obstacles mobiles
         moving_obstacles = []
         for _ in range(count):
             start_pos = (random.randint(0, self.num_rows - 1), random.randint(0, self.num_cols - 1))
@@ -243,7 +256,7 @@ class PacmanGame:
         self.draw_maze()
 
         if self.exit_unlocked and tuple(self.player_pos) == self.exit_pos:
-            if self.level == 5:
+            if self.level == 3:
                 self.display_victory()
                 return
             else:
@@ -251,7 +264,8 @@ class PacmanGame:
                 self.start_play()
                 return
 
-        self.root.after(150, self.move)
+        vitesse = {1: 140, 2: 130, 3: 120}
+        self.root.after(vitesse.get(self.level, 140), self.move)
 
     def display_game_over(self):
         self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2 - 50,
@@ -274,10 +288,12 @@ class PacmanGame:
         self.menu_buttons.append(restart_button)
 
     def restart_game(self):
+        """Réinitialise le jeu et redémarre à partir du menu de démarrage."""
         for btn in self.menu_buttons:
             btn.destroy()
         self.menu_buttons.clear()
-        self.show_start_menu()
+        self.reset_game()  # Réinitialiser toutes les variables du jeu
+        self.show_start_menu()  # Afficher le menu de démarrage
 
     def clear_canvas(self):
         self.canvas.delete("all")
