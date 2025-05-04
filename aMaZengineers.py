@@ -3,333 +3,293 @@ import random
 import time
 import os
 
-class MovingObstacle:
-    def __init__(self, start_pos, direction, grid_size, num_rows, num_cols):
-        self.pos = start_pos
-        self.direction = direction
-        self.grid_size = grid_size
-        self.num_rows = num_rows
-        self.num_cols = num_cols
+# Paramètres globaux
+grid_size = 20
+num_rows = 35
+num_cols = 62
+exit_pos = (0, 61)
 
-    def move(self):
-        row, col = self.pos
-        if self.direction == "right":
-            col += 1
-        elif self.direction == "left":
-            col -= 1
-        elif self.direction == "up":
+# Variables de jeu
+canvas = None
+root = None
+player_pos = [33, 0]
+direction = "right"
+obstacles = []
+moving_obstacles = []
+bonbons = []
+exit_unlocked = False
+lives = 10
+level = 1
+start_time = None
+elapsed_time = 0
+best_time = None
+menu_buttons = []
+
+def load_best_time():
+    try:
+        with open("best_score.txt", "r") as f:
+            return int(f.read().strip())
+    except:
+        return None
+
+def save_best_time(time_seconds):
+    with open("best_score.txt", "w") as f:
+        f.write(str(time_seconds))
+
+def reset_game():
+    global player_pos, direction, obstacles, moving_obstacles, bonbons, exit_unlocked, lives, level, start_time, elapsed_time
+    player_pos = [33, 0]
+    direction = "right"
+    lives = 10
+    level = 1
+    start_time = None
+    elapsed_time = 0
+    exit_unlocked = False
+    obstacles = generate_obstacles()
+    moving_obstacles = create_moving_obstacles()
+    bonbons = generate_bonbons()
+
+def show_start_menu():
+    clear_canvas()
+    if best_time is not None:
+        root.after(100, display_best_time)
+    start_btn = tk.Button(root, text="Démarrer le jeu", font=("Arial", 16, "bold"),
+                          width=20, height=2, command=start_game, bg="#4CAF50", fg="white")
+    quit_btn = tk.Button(root, text="Quitter", font=("Arial", 16, "bold"),
+                         width=20, height=2, command=root.destroy, bg="red", fg="white")
+    start_btn.place(relx=0.5, rely=0.4, anchor="center")
+    quit_btn.place(relx=0.5, rely=0.6, anchor="center")
+    menu_buttons.extend([start_btn, quit_btn])
+
+def display_best_time():
+    canvas.delete("best_time_text")
+    best_minutes = best_time // 60
+    best_seconds = best_time % 60
+    canvas.create_text(canvas.winfo_width() // 2, 40,
+                       text=f"Meilleur temps : {best_minutes:02}:{best_seconds:02}",
+                       fill="gold", font=("Arial", 18, "bold"), tags="best_time_text")
+
+def start_game():
+    for btn in menu_buttons:
+        btn.destroy()
+    menu_buttons.clear()
+    show_instructions()
+
+def show_instructions():
+    msg = (
+        "Bienvenue dans Pac-Man Challenge !\n\n"
+        "Objectif : Ramassez tous les bonbons pour débloquer la sortie verte.\n"
+        "Utilisez les FLÈCHES pour vous déplacer.\n"
+        "Vous avez 10 vies pour y arriver. Bonne chance !"
+    )
+    font_style = ("Arial", 14, "bold")
+    text_id = canvas.create_text(0, 0, text=msg, font=font_style, anchor="nw", tags="msg")
+    canvas.update_idletasks()
+    bbox = canvas.bbox(text_id)
+    canvas.delete(text_id)
+    x = (canvas.winfo_width() - (bbox[2] - bbox[0])) // 2
+    y = (canvas.winfo_height() - (bbox[3] - bbox[1])) // 2
+    canvas.create_rectangle(x - 20, y - 20, x + (bbox[2] - bbox[0]) + 20,
+                            y + (bbox[3] - bbox[1]) + 20, fill="white", outline="black", tags="msg")
+    canvas.create_text(x + 2, y + 2, text=msg, font=font_style, fill="black", anchor="nw", tags="msg")
+    root.after(3000, start_play)
+
+def start_play():
+    global player_pos, direction, lives, obstacles, bonbons, moving_obstacles, exit_unlocked, start_time
+    canvas.delete("msg")
+    player_pos = [33, 0]
+    direction = "right"
+    lives = 10
+    obstacles = generate_obstacles()
+    moving_obstacles = create_moving_obstacles()
+    bonbons = generate_bonbons()
+    exit_unlocked = False
+    root.bind("<Up>", lambda e: change_direction("up"))
+    root.bind("<Down>", lambda e: change_direction("down"))
+    root.bind("<Left>", lambda e: change_direction("left"))
+    root.bind("<Right>", lambda e: change_direction("right"))
+    if level == 1:
+        start_time = time.time()
+    move()
+
+def change_direction(new_dir):
+    global direction
+    direction = new_dir
+
+def generate_obstacles(count=300):
+    forbidden = {(33, 0), exit_pos}
+    protected_zone = {(i, j) for i in range(26, 41) for j in range(0, 15)}
+    obstacles = set()
+    while len(obstacles) < count:
+        pos = (random.randint(0, num_rows - 1), random.randint(0, num_cols - 1))
+        if pos not in obstacles and pos not in forbidden and pos not in protected_zone:
+            obstacles.add(pos)
+    return list(obstacles)
+
+def generate_bonbons(count=5):
+    bonbons_set = set()
+    while len(bonbons_set) < count:
+        pos = (random.randint(0, num_rows - 1), random.randint(0, num_cols - 1))
+        if pos not in bonbons_set and pos not in obstacles and pos != tuple(player_pos):
+            bonbons_set.add(pos)
+    return list(bonbons_set)
+
+def create_moving_obstacles(count=7):
+    return [{"pos": (random.randint(0, num_rows - 1), random.randint(0, num_cols - 1)),
+             "dir": random.choice(["up", "down", "left", "right"])} for _ in range(count)]
+
+def move_obstacles():
+    for mob in moving_obstacles:
+        row, col = mob["pos"]
+        direction = mob["dir"]
+        if direction == "up":
             row -= 1
-        elif self.direction == "down":
+        elif direction == "down":
             row += 1
-
-        if not (0 <= row < self.num_rows and 0 <= col < self.num_cols):
-            self.direction = random.choice(["up", "down", "left", "right"])
+        elif direction == "left":
+            col -= 1
+        elif direction == "right":
+            col += 1
+        if 0 <= row < num_rows and 0 <= col < num_cols:
+            mob["pos"] = (row, col)
         else:
-            self.pos = (row, col)
+            mob["dir"] = random.choice(["up", "down", "left", "right"])
 
-class aMaZengineers:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Pac-Man Challenge")
+def move():
+    global player_pos, lives, bonbons, exit_unlocked, level, elapsed_time
+    if lives == 0:
+        display_game_over()
+        return
 
-        self.grid_size = 20
-        self.num_rows = 35
-        self.num_cols = 62
+    move_obstacles()
 
-        canvas_width = self.num_cols * self.grid_size
-        canvas_height = self.num_rows * self.grid_size + 50
-        self.canvas = tk.Canvas(root, width=canvas_width, height=canvas_height, bg="midnightblue")
-        self.canvas.pack()
+    row, col = player_pos
+    if direction == "right": col += 1
+    elif direction == "left": col -= 1
+    elif direction == "up": row -= 1
+    elif direction == "down": row += 1
 
-        self.menu_buttons = []
-        self.level = 1
-        self.start_time = None
-        self.elapsed_time = 0
-        self.best_time = self.load_best_time()
-        self.bonbons = []
-        self.show_start_menu()
+    new_pos = (row, col)
 
-    def load_best_time(self):
-        try:
-            with open("best_score.txt", "r") as f:
-                return int(f.read().strip())
-        except:
-            return None
+    if new_pos in obstacles or new_pos in [o["pos"] for o in moving_obstacles] or not (0 <= row < num_rows and 0 <= col < num_cols):
+        lives -= 1
+        player_pos = [33, 0]
+    else:
+        player_pos = [row, col]
 
-    def save_best_time(self, time_seconds):
-        with open("best_score.txt", "w") as f:
-            f.write(str(time_seconds))
+    if new_pos in bonbons:
+        bonbons.remove(new_pos)
 
-    def reset_game(self):
-        self.level = 1
-        self.lives = 10
-        self.start_time = None
-        self.elapsed_time = 0
-        self.player_pos = [33, 0]
-        self.direction = "right"
-        self.exit_unlocked = False
-        self.bonbons = self.generate_bonbons(count=5)
-        self.obstacles = self.generate_obstacles(count=300)
-        self.moving_obstacles = self.create_moving_obstacles(count=2)
-        self.clear_canvas()
+    if not bonbons and not exit_unlocked:
+        exit_unlocked = True
+        canvas.create_text(canvas.winfo_width() // 2, canvas.winfo_height() // 2,
+                           text="Sortie débloquée !", fill="lime", font=("Arial", 18, "bold"))
+        root.after(1500, clear_canvas)
 
-    def show_start_menu(self):
-        self.clear_canvas()
+    draw_maze()
 
-        if self.best_time is not None:
-            self.root.after(100, self.display_best_time)
-
-        start_button = tk.Button(self.root, text="Démarrer le jeu", font=("Arial", 16, "bold"),
-                                 width=20, height=2, command=self.start_game, bg="#4CAF50", fg="white")
-        quit_button = tk.Button(self.root, text="Quitter", font=("Arial", 16, "bold"),
-                                width=20, height=2, command=self.root.destroy, bg="red", fg="white")
-
-        start_button.place(relx=0.5, rely=0.4, anchor="center")
-        quit_button.place(relx=0.5, rely=0.6, anchor="center")
-
-        self.menu_buttons.extend([start_button, quit_button])
-
-    def display_best_time(self):
-        self.canvas.delete("best_time_text")
-        best_minutes = self.best_time // 60
-        best_seconds = self.best_time % 60
-        canvas_width = self.canvas.winfo_width()
-        self.canvas.create_text(canvas_width // 2, 40,
-                                text=f"Meilleur temps : {best_minutes:02}:{best_seconds:02}",
-                                fill="gold", font=("Arial", 18, "bold"), tags="best_time_text")
-
-    def start_game(self):
-        for btn in self.menu_buttons:
-            btn.destroy()
-        self.menu_buttons.clear()
-        self.show_instructions()
-
-    def show_instructions(self):
-        message = (
-            "Bienvenue dans Pac-Man Challenge !\n\n"
-            "Objectif : Ramassez tous les bonbons pour débloquer la sortie verte.\n"
-            "Utilisez les FLÈCHES pour vous déplacer.\n"
-            "Vous avez 10 vies pour y arriver. Bonne chance !"
-        )
-
-        font_style = ("Arial", 14, "bold")
-        text_id = self.canvas.create_text(0, 0, text=message, font=font_style, anchor="nw", tags="msg")
-        self.canvas.update_idletasks()
-        bbox = self.canvas.bbox(text_id)
-        self.canvas.delete(text_id)
-
-        x = (self.canvas.winfo_width() - (bbox[2] - bbox[0])) // 2
-        y = (self.canvas.winfo_height() - (bbox[3] - bbox[1])) // 2
-
-        self.canvas.create_rectangle(x - 20, y - 20, x + (bbox[2] - bbox[0]) + 20,
-                                     y + (bbox[3] - bbox[1]) + 20, fill="white", outline="black", tags="msg")
-        self.canvas.create_text(x + 2, y + 2, text=message, font=font_style, fill="black", anchor="nw", tags="msg")
-
-        self.root.after(3000, self.start_play)
-
-    def start_play(self):
-        self.canvas.delete("msg")
-
-        self.player_pos = [33, 0]
-        self.direction = "right"
-        self.lives = 10
-        self.exit_pos = (0, 61)
-        self.obstacles = self.generate_obstacles(count=300)
-        self.moving_obstacles = self.create_moving_obstacles(count=2)
-        self.bonbons = self.generate_bonbons(count=5)
-        self.exit_unlocked = False
-
-        self.root.bind("<Up>", self.change_direction_up)
-        self.root.bind("<Down>", self.change_direction_down)
-        self.root.bind("<Left>", self.change_direction_left)
-        self.root.bind("<Right>", self.change_direction_right)
-
-        if self.level == 1:
-            self.start_time = time.time()
-
-        self.move()
-
-    def generate_obstacles(self, count=300):
-        obstacles = set()
-        forbidden = {tuple(self.player_pos), self.exit_pos}
-        protected_zone = set()
-        px, py = self.player_pos
-        for i in range(px - 7, px + 8):
-            for j in range(py - 7, py + 8):
-                if 0 <= i < self.num_rows and 0 <= j < self.num_cols:
-                    protected_zone.add((i, j))
-
-        while len(obstacles) < count:
-            row = random.randint(0, self.num_rows - 1)
-            col = random.randint(0, self.num_cols - 1)
-            pos = (row, col)
-            if pos not in obstacles and pos not in forbidden and pos not in protected_zone:
-                obstacles.add(pos)
-
-        return list(obstacles)
-
-    def generate_bonbons(self, count=5):
-        bonbons = set()
-        while len(bonbons) < count:
-            row = random.randint(0, self.num_rows - 1)
-            col = random.randint(0, self.num_cols - 1)
-            pos = (row, col)
-            if pos not in bonbons and pos not in self.obstacles and pos != tuple(self.player_pos):
-                bonbons.add(pos)
-        return list(bonbons)
-
-    def create_moving_obstacles(self, count=2):
-        moving_obstacles = []
-        for _ in range(count):
-            start_pos = (random.randint(0, self.num_rows - 1), random.randint(0, self.num_cols - 1))
-            direction = random.choice(["up", "down", "left", "right"])
-            moving_obstacles.append(MovingObstacle(start_pos, direction, self.grid_size, self.num_rows, self.num_cols))
-        return moving_obstacles
-
-    def draw_maze(self):
-        self.clear_canvas()
-
-        for (row, col) in self.obstacles:
-            x1 = col * self.grid_size
-            y1 = row * self.grid_size
-            x2 = x1 + self.grid_size
-            y2 = y1 + self.grid_size
-            self.canvas.create_oval(x1 + 2, y1 + 2, x2 - 2, y2 - 2, fill="gray35")
-
-        if self.exit_unlocked:
-            ex, ey = self.exit_pos[1] * self.grid_size, self.exit_pos[0] * self.grid_size
-            self.canvas.create_oval(ex - 5, ey - 5, ex + self.grid_size + 5, ey + self.grid_size + 5, outline="limegreen", width=4)
-            self.canvas.create_oval(ex, ey, ex + self.grid_size, ey + self.grid_size, fill="limegreen", outline="black", width=2)
-
-        for (row, col) in self.bonbons:
-            x = col * self.grid_size + self.grid_size // 2
-            y = row * self.grid_size + self.grid_size // 2
-            self.canvas.create_oval(x - 5, y - 5, x + 5, y + 5, fill="white", outline="pink")
-
-        px, py = self.player_pos[1] * self.grid_size, self.player_pos[0] * self.grid_size
-        self.canvas.create_oval(px + 3, py + 3, px + self.grid_size - 3, py + self.grid_size - 3,
-                                fill="yellow", outline="orange", width=3)
-
-        for obstacle in self.moving_obstacles:
-            ox, oy = obstacle.pos[1] * self.grid_size, obstacle.pos[0] * self.grid_size
-            self.canvas.create_oval(ox + 3, oy + 3, ox + self.grid_size - 3, oy + self.grid_size - 3,
-                                    fill="red", outline="black", width=2)
-
-        self.draw_status()
-
-    def draw_status(self):
-        bottom_y = self.num_rows * self.grid_size + 10
-        for i in range(10):
-            x1 = 10 + i * 30
-            y1 = bottom_y
-            x2 = x1 + 20
-            y2 = y1 + 20
-            color = "red" if i < self.lives else "gray"
-            self.canvas.create_oval(x1, y1, x2, y2, fill=color, outline="white")
-
-        bonbons_text = f"Bonbons restants : {len(self.bonbons)}"
-        self.canvas.create_text(350, bottom_y + 10, anchor="nw", text=bonbons_text, fill="white", font=("Arial", 14, "bold"))
-
-        if self.start_time:
-            self.elapsed_time = int(time.time() - self.start_time)
-            minutes = self.elapsed_time // 60
-            seconds = self.elapsed_time % 60
-            self.canvas.create_text(self.canvas.winfo_width() - 10, bottom_y + 10, anchor="ne",
-                                    text=f"Temps : {minutes:02}:{seconds:02}", fill="white", font=("Arial", 14, "bold"))
-
-    def change_direction_up(self, event): self.direction = "up"
-    def change_direction_down(self, event): self.direction = "down"
-    def change_direction_left(self, event): self.direction = "left"
-    def change_direction_right(self, event): self.direction = "right"
-
-    def move(self):
-        if self.lives == 0:
-            self.display_game_over()
+    if exit_unlocked and tuple(player_pos) == exit_pos:
+        if level == 3:
+            display_victory()
+            return
+        else:
+            level += 1
+            start_play()
             return
 
-        for obstacle in self.moving_obstacles:
-            obstacle.move()
+    vitesse = {1: 140, 2: 130, 3: 120}
+    root.after(vitesse.get(level, 140), move)
 
-        row, col = self.player_pos
-        if self.direction == "right":
-            col += 1
-        elif self.direction == "left":
-            col -= 1
-        elif self.direction == "up":
-            row -= 1
-        elif self.direction == "down":
-            row += 1
+def draw_maze():
+    clear_canvas()
+    for (r, c) in obstacles:
+        x1 = c * grid_size
+        y1 = r * grid_size
+        x2 = x1 + grid_size
+        y2 = y1 + grid_size
+        canvas.create_oval(x1 + 2, y1 + 2, x2 - 2, y2 - 2, fill="gray35")
 
-        new_pos = (row, col)
+    if exit_unlocked:
+        ex, ey = exit_pos[1] * grid_size, exit_pos[0] * grid_size
+        canvas.create_oval(ex - 5, ey - 5, ex + grid_size + 5, ey + grid_size + 5, outline="limegreen", width=4)
+        canvas.create_oval(ex, ey, ex + grid_size, ey + grid_size, fill="limegreen", outline="black", width=2)
 
-        if new_pos in self.obstacles or new_pos in [o.pos for o in self.moving_obstacles] or not (0 <= row < self.num_rows and 0 <= col < self.num_cols):
-            self.lives -= 1
-            self.player_pos = [33, 0]
-        else:
-            self.player_pos = [row, col]
+    for (r, c) in bonbons:
+        x = c * grid_size + grid_size // 2
+        y = r * grid_size + grid_size // 2
+        canvas.create_oval(x - 5, y - 5, x + 5, y + 5, fill="white", outline="pink")
 
-        if new_pos in self.bonbons:
-            self.bonbons.remove(new_pos)
+    px, py = player_pos[1] * grid_size, player_pos[0] * grid_size
+    canvas.create_oval(px + 3, py + 3, px + grid_size - 3, py + grid_size - 3, fill="yellow", outline="orange", width=3)
 
-        if not self.bonbons and not self.exit_unlocked:
-            self.exit_unlocked = True
-            self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2,
-                                    text="Sortie débloquée !", fill="lime", font=("Arial", 18, "bold"))
-            self.root.after(1500, lambda: self.canvas.delete("all"))
+    for mob in moving_obstacles:
+        ox, oy = mob["pos"][1] * grid_size, mob["pos"][0] * grid_size
+        canvas.create_oval(ox + 3, oy + 3, ox + grid_size - 3, oy + grid_size - 3, fill="red", outline="black", width=2)
 
-        self.draw_maze()
+    draw_status()
 
-        if self.exit_unlocked and tuple(self.player_pos) == self.exit_pos:
-            if self.level == 3:
-                self.display_victory()
-                return
-            else:
-                self.level += 1
-                self.start_play()
-                return
+def draw_status():
+    bottom_y = num_rows * grid_size + 10
+    for i in range(10):
+        x1 = 10 + i * 30
+        x2 = x1 + 20
+        color = "red" if i < lives else "gray"
+        canvas.create_oval(x1, bottom_y, x2, bottom_y + 20, fill=color, outline="white")
 
-        vitesse = {1: 140, 2: 130, 3: 120}
-        self.root.after(vitesse.get(self.level, 140), self.move)
+    canvas.create_text(350, bottom_y + 10, anchor="nw", text=f"Bonbons restants : {len(bonbons)}", fill="white", font=("Arial", 14, "bold"))
 
-    def display_game_over(self):
-        self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2 - 50,
-                                text="Game Over!", fill="red", font=("Arial", 24, "bold"))
-        self.show_restart_button()
+    if start_time:
+        elapsed = int(time.time() - start_time)
+        mins = elapsed // 60
+        secs = elapsed % 60
+        canvas.create_text(canvas.winfo_width() - 10, bottom_y + 10, anchor="ne",
+                           text=f"Temps : {mins:02}:{secs:02}", fill="white", font=("Arial", 14, "bold"))
 
-    def display_victory(self):
-        total_time = int(time.time() - self.start_time)
-        minutes = total_time // 60
-        seconds = total_time % 60
-        self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2 - 70,
-                                text="Félicitations ! Vous avez gagné !", fill="lime", font=("Arial", 24, "bold"))
-        self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2 - 30,
-                                text=f"Temps total : {minutes:02}:{seconds:02}", fill="white", font=("Arial", 18))
+def display_game_over():
+    canvas.create_text(canvas.winfo_width() // 2, canvas.winfo_height() // 2 - 50,
+                       text="Game Over!", fill="red", font=("Arial", 24, "bold"))
+    show_restart_button()
 
-        if self.best_time is None or total_time < self.best_time:
-            self.best_time = total_time
-            self.save_best_time(total_time)
-            self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2 + 10,
-                                    text="Nouveau record !", fill="gold", font=("Arial", 18, "bold"))
+def display_victory():
+    global best_time
+    total = int(time.time() - start_time)
+    mins = total // 60
+    secs = total % 60
+    canvas.create_text(canvas.winfo_width() // 2, canvas.winfo_height() // 2 - 70,
+                       text="Félicitations ! Vous avez gagné !", fill="lime", font=("Arial", 24, "bold"))
+    canvas.create_text(canvas.winfo_width() // 2, canvas.winfo_height() // 2 - 30,
+                       text=f"Temps total : {mins:02}:{secs:02}", fill="white", font=("Arial", 18))
+    if best_time is None or total < best_time:
+        best_time = total
+        save_best_time(total)
+        canvas.create_text(canvas.winfo_width() // 2, canvas.winfo_height() // 2 + 10,
+                           text="Nouveau record !", fill="gold", font=("Arial", 18, "bold"))
+    show_restart_button()
 
-        self.show_restart_button()
+def show_restart_button():
+    restart_btn = tk.Button(root, text="Rejouer", font=("Arial", 16, "bold"),
+                            command=restart_game, bg="orange", fg="white")
+    restart_btn.place(relx=0.5, rely=0.55, anchor="center")
+    menu_buttons.append(restart_btn)
 
-    def show_restart_button(self):
-        restart_button = tk.Button(self.root, text="Rejouer", font=("Arial", 16, "bold"),
-                                   command=self.restart_game, bg="orange", fg="white")
-        restart_button.place(relx=0.5, rely=0.55, anchor="center")
-        self.menu_buttons.append(restart_button)
+def restart_game():
+    for btn in menu_buttons:
+        btn.destroy()
+    menu_buttons.clear()
+    reset_game()
+    show_start_menu()
 
-    def restart_game(self):
-        for btn in self.menu_buttons:
-            btn.destroy()
-        self.menu_buttons.clear()
-        self.reset_game()
-        self.show_start_menu()
+def clear_canvas():
+    canvas.delete("all")
 
-    def clear_canvas(self):
-        self.canvas.delete("all")
-
-# Lancer le jeu
+# Initialisation de la fenêtre
 root = tk.Tk()
-game = aMaZengineers(root)
+root.title("Pac-Man Challenge")
+canvas = tk.Canvas(root, width=num_cols * grid_size, height=num_rows * grid_size + 50, bg="midnightblue")
+canvas.pack()
+
+best_time = load_best_time()
+reset_game()
+show_start_menu()
+
 root.mainloop()
