@@ -1,6 +1,7 @@
 import tkinter as tk
 import random
 import time
+import os
 
 class MovingObstacle:
     def __init__(self, start_pos, direction, grid_size, num_rows, num_cols):
@@ -26,7 +27,7 @@ class MovingObstacle:
         else:
             self.pos = (row, col)
 
-class PacmanGame:
+class aMaZengineers:
     def __init__(self, root):
         self.root = root
         self.root.title("Pac-Man Challenge")
@@ -44,11 +45,22 @@ class PacmanGame:
         self.level = 1
         self.start_time = None
         self.elapsed_time = 0
+        self.best_time = self.load_best_time()
         self.bonbons = []
         self.show_start_menu()
 
+    def load_best_time(self):
+        try:
+            with open("best_score.txt", "r") as f:
+                return int(f.read().strip())
+        except:
+            return None
+
+    def save_best_time(self, time_seconds):
+        with open("best_score.txt", "w") as f:
+            f.write(str(time_seconds))
+
     def reset_game(self):
-        """Réinitialise les variables essentielles du jeu pour recommencer à zéro."""
         self.level = 1
         self.lives = 10
         self.start_time = None
@@ -56,13 +68,17 @@ class PacmanGame:
         self.player_pos = [33, 0]
         self.direction = "right"
         self.exit_unlocked = False
-        self.bonbons = self.generate_bonbons(count=5)  # Initialisation des bonbons pour le niveau 1
-        self.obstacles = self.generate_obstacles(count=300)  # Initialisation des obstacles
-        self.moving_obstacles = self.create_moving_obstacles(count=2)  # Obstacles mobiles pour le niveau 1
+        self.bonbons = self.generate_bonbons(count=5)
+        self.obstacles = self.generate_obstacles(count=300)
+        self.moving_obstacles = self.create_moving_obstacles(count=2)
         self.clear_canvas()
 
     def show_start_menu(self):
         self.clear_canvas()
+
+        if self.best_time is not None:
+            self.root.after(100, self.display_best_time)
+
         start_button = tk.Button(self.root, text="Démarrer le jeu", font=("Arial", 16, "bold"),
                                  width=20, height=2, command=self.start_game, bg="#4CAF50", fg="white")
         quit_button = tk.Button(self.root, text="Quitter", font=("Arial", 16, "bold"),
@@ -72,6 +88,15 @@ class PacmanGame:
         quit_button.place(relx=0.5, rely=0.6, anchor="center")
 
         self.menu_buttons.extend([start_button, quit_button])
+
+    def display_best_time(self):
+        self.canvas.delete("best_time_text")
+        best_minutes = self.best_time // 60
+        best_seconds = self.best_time % 60
+        canvas_width = self.canvas.winfo_width()
+        self.canvas.create_text(canvas_width // 2, 40,
+                                text=f"Meilleur temps : {best_minutes:02}:{best_seconds:02}",
+                                fill="gold", font=("Arial", 18, "bold"), tags="best_time_text")
 
     def start_game(self):
         for btn in self.menu_buttons:
@@ -88,7 +113,6 @@ class PacmanGame:
         )
 
         font_style = ("Arial", 14, "bold")
-
         text_id = self.canvas.create_text(0, 0, text=message, font=font_style, anchor="nw", tags="msg")
         self.canvas.update_idletasks()
         bbox = self.canvas.bbox(text_id)
@@ -111,8 +135,8 @@ class PacmanGame:
         self.lives = 10
         self.exit_pos = (0, 61)
         self.obstacles = self.generate_obstacles(count=300)
-        self.moving_obstacles = self.create_moving_obstacles(count=2)  # Niveau 1 : 2 obstacles mobiles
-        self.bonbons = self.generate_bonbons(count=5)  # Niveau 1 : 5 bonbons
+        self.moving_obstacles = self.create_moving_obstacles(count=2)
+        self.bonbons = self.generate_bonbons(count=5)
         self.exit_unlocked = False
 
         self.root.bind("<Up>", self.change_direction_up)
@@ -144,7 +168,7 @@ class PacmanGame:
 
         return list(obstacles)
 
-    def generate_bonbons(self, count=5):  # Niveau 1 : 5 bonbons
+    def generate_bonbons(self, count=5):
         bonbons = set()
         while len(bonbons) < count:
             row = random.randint(0, self.num_rows - 1)
@@ -154,7 +178,7 @@ class PacmanGame:
                 bonbons.add(pos)
         return list(bonbons)
 
-    def create_moving_obstacles(self, count=2):  # Niveau 1 : 2 obstacles mobiles
+    def create_moving_obstacles(self, count=2):
         moving_obstacles = []
         for _ in range(count):
             start_pos = (random.randint(0, self.num_rows - 1), random.randint(0, self.num_cols - 1))
@@ -273,12 +297,20 @@ class PacmanGame:
         self.show_restart_button()
 
     def display_victory(self):
-        minutes = self.elapsed_time // 60
-        seconds = self.elapsed_time % 60
+        total_time = int(time.time() - self.start_time)
+        minutes = total_time // 60
+        seconds = total_time % 60
         self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2 - 70,
                                 text="Félicitations ! Vous avez gagné !", fill="lime", font=("Arial", 24, "bold"))
         self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2 - 30,
                                 text=f"Temps total : {minutes:02}:{seconds:02}", fill="white", font=("Arial", 18))
+
+        if self.best_time is None or total_time < self.best_time:
+            self.best_time = total_time
+            self.save_best_time(total_time)
+            self.canvas.create_text(self.canvas.winfo_width() // 2, self.canvas.winfo_height() // 2 + 10,
+                                    text="Nouveau record !", fill="gold", font=("Arial", 18, "bold"))
+
         self.show_restart_button()
 
     def show_restart_button(self):
@@ -288,17 +320,16 @@ class PacmanGame:
         self.menu_buttons.append(restart_button)
 
     def restart_game(self):
-        """Réinitialise le jeu et redémarre à partir du menu de démarrage."""
         for btn in self.menu_buttons:
             btn.destroy()
         self.menu_buttons.clear()
-        self.reset_game()  # Réinitialiser toutes les variables du jeu
-        self.show_start_menu()  # Afficher le menu de démarrage
+        self.reset_game()
+        self.show_start_menu()
 
     def clear_canvas(self):
         self.canvas.delete("all")
 
 # Lancer le jeu
 root = tk.Tk()
-game = PacmanGame(root)
+game = aMaZengineers(root)
 root.mainloop()
