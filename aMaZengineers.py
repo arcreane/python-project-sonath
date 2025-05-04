@@ -293,3 +293,28 @@ reset_game()
 show_start_menu()
 
 root.mainloop()
+
+import pygame
+import sys
+
+def jouer_jeu3(screen, clock, progression, retour_menu):
+    running = True
+    font = pygame.font.Font(None, 36)
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+
+        screen.fill((255, 180, 100))
+        text = font.render("Jeu 3 - aMaZengineers (appuie sur Échap pour revenir)", True, (0, 0, 0))
+        screen.blit(text, (50, 250))
+
+        pygame.display.flip()
+        clock.tick(60)
+
+    retour_menu()
